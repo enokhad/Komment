@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="hu"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ranglista</title>
+<style>
+:root{--c:#1d2a22;--t:#ece3cc;--m:#9fae9c;--g:#c8a24a;--bd:#3a4d3f;color-scheme:dark}
+*{box-sizing:border-box}body{margin:0;padding:4px;background:#121b16;color:var(--t);font:16px/1.5 Georgia,serif}
+.r{display:flex;gap:10px;align-items:center;background:var(--c);border:1px solid var(--bd);border-radius:6px;padding:8px 10px;margin-bottom:6px}
+.r.me{border-color:var(--g);box-shadow:0 0 0 1px var(--g)}
+.p{font:bold 1.3em system-ui,sans-serif;color:var(--g);min-width:2.2em;text-align:center}
+.n{flex:1;min-width:0}.n b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.n span{color:var(--m);font-size:.85em}.s{color:var(--g);font-weight:bold;text-align:right;font-size:.95em}
+.note{color:var(--m);font-size:.85em}
+</style></head><body>
+<div id="l"><p class="note">Betöltés…</p></div><p class="note" id="st"></p>
+<script type="module">
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyAn99OZXIQM5SaADMGEt-cHdnHecUi2e5c",
+  authDomain: "regenyek2-komment.firebaseapp.com",
+  projectId: "regenyek2-komment",
+  storageBucket: "regenyek2-komment.firebasestorage.app",
+  messagingSenderId: "590825336958",
+  appId: "1:590825336958:web:2c63f234a35bee4147a82f"
+};
+const $ = s => document.getElementById(s), P = new URLSearchParams(location.search), me = P.get("me") || "", sync = P.get("s");
+if (sync) $("l").textContent = "";
+try {
+  const base = "https://www.gstatic.com/firebasejs/10.12.2/";
+  const { initializeApp } = await import(base + "firebase-app.js");
+  const fs = await import(base + "firebase-firestore.js");
+  const db = fs.initializeFirestore(initializeApp(FIREBASE_CONFIG), { experimentalAutoDetectLongPolling: true });
+  // a játék (neocities.org) küldi a játékos adatait
+  addEventListener("message", async e => {
+    const d = e.data;
+    if (!/^https:\/\/[a-z0-9-]+\.neocities\.org$/.test(e.origin) || !d || d.type != "tga" || typeof d.id != "string") return;
+    const lv = Math.min(10, Math.max(1, +d.lv || 1)), q = Math.max(0, Math.floor(+d.q || 0)), gold = Math.max(0, Math.floor(+d.gold || 0));
+    const score = lv * 1000 + q * 150 + Math.floor(gold / 10);
+    try { await fs.setDoc(fs.doc(db, "scores", d.id.slice(0, 24)), { name: String(d.name).slice(0, 20), cls: String(d.cls).slice(0, 12), lv, q, gold, score, t: Date.now() }); }
+    catch (x) { $("st").textContent = "Mentési hiba: " + (x.code || x.message); }
+  });
+  if (!sync) fs.onSnapshot(fs.query(fs.collection(db, "scores"), fs.orderBy("score", "desc"), fs.limit(10)), snap => {
+    const l = $("l"); l.textContent = "";
+    if (snap.empty) { l.innerHTML = '<p class="note">Még nincs egyetlen játékos sem a listán.</p>'; return; }
+    snap.docs.forEach((doc, i) => {
+      const d = doc.data(), r = document.createElement("div"); r.className = "r" + (doc.id == me ? " me" : "");
+      const p = document.createElement("div"); p.className = "p"; p.textContent = ["🥇", "🥈", "🥉"][i] || (i + 1) + ".";
+      const n = document.createElement("div"); n.className = "n";
+      const b = document.createElement("b"); b.textContent = d.name;
+      const s = document.createElement("span"); s.textContent = `${d.cls} · ${d.lv}. szint · ${d.q} küldetés · ${d.gold} arany`;
+      n.append(b, s);
+      const sc = document.createElement("div"); sc.className = "s"; sc.textContent = d.score + " pont";
+      r.append(p, n, sc); l.append(r);
+    });
+  }, err => { $("st").textContent = "Hiba az olvasásnál: " + err.code; });
+} catch (e) { $("st").textContent = "Nem sikerült betölteni a Firebase-t: " + e.message; }
+</script></body></html>
