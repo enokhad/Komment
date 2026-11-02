@@ -33,7 +33,7 @@ try {
   addEventListener("message", async e => {
     const d = e.data;
     if (!/^https:\/\/[a-z0-9-]+\.neocities\.org$/.test(e.origin) || !d || d.type != "tga" || typeof d.id != "string") return;
-    const lv = Math.min(10, Math.max(1, +d.lv || 1)), q = Math.max(0, Math.floor(+d.q || 0)), gold = Math.max(0, Math.floor(+d.gold || 0));
+    const lv = Math.min(50, Math.max(1, +d.lv || 1)), q = Math.max(0, Math.floor(+d.q || 0)), gold = Math.max(0, Math.floor(+d.gold || 0));
     const score = lv * 1000 + q * 150 + Math.floor(gold / 10);
     try { await fs.setDoc(fs.doc(db, "scores", d.id.slice(0, 24)), { name: String(d.name).slice(0, 20), cls: String(d.cls).slice(0, 12), lv, q, gold, score, t: Date.now() }); }
     catch (x) { $("st").textContent = "Mentési hiba: " + (x.code || x.message); }
