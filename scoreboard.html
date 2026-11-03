@@ -1,18 +1,30 @@
 <!DOCTYPE html>
 <html lang="hu"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Ranglista</title>
+<title>Fiók és ranglista</title>
 <style>
 :root{--c:#1d2a22;--t:#ece3cc;--m:#9fae9c;--g:#c8a24a;--bd:#3a4d3f;color-scheme:dark}
-*{box-sizing:border-box}body{margin:0;padding:4px;background:#121b16;color:var(--t);font:16px/1.5 Georgia,serif}
+*{box-sizing:border-box}body{margin:0;padding:8px;background:#121b16;color:var(--t);font:16px/1.5 Georgia,serif}
+input[type=text],input[type=password]{width:100%;padding:10px;margin:5px 0;border-radius:6px;border:1px solid var(--g);background:var(--c);color:var(--t);font:inherit}
+button{width:100%;padding:11px;margin:5px 0;border:0;border-radius:6px;background:var(--g);color:#1a1507;font:bold 1em Georgia,serif}
+button.s{background:var(--c);color:var(--t);border:1px solid var(--bd)}
+label{display:block;margin:6px 0;color:var(--m)}h3{margin:.2em 0;color:var(--g)}
 .r{display:flex;gap:10px;align-items:center;background:var(--c);border:1px solid var(--bd);border-radius:6px;padding:8px 10px;margin-bottom:6px}
 .r.me{border-color:var(--g);box-shadow:0 0 0 1px var(--g)}
 .p{font:bold 1.3em system-ui,sans-serif;color:var(--g);min-width:2.2em;text-align:center}
 .n{flex:1;min-width:0}.n b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.n span{color:var(--m);font-size:.85em}.s{color:var(--g);font-weight:bold;text-align:right;font-size:.95em}
-.note{color:var(--m);font-size:.85em}
+.n span{color:var(--m);font-size:.85em}.s2{color:var(--g);font-weight:bold;text-align:right;font-size:.95em}
+.note{color:var(--m);font-size:.85em}.er{color:#d36b57;font-size:.9em;min-height:1.2em}
 </style></head><body>
-<div id="l"><p class="note">Betöltés…</p></div><p class="note" id="st"></p>
+<div id="f" hidden>
+  <h3>Belépés / Regisztráció</h3>
+  <input id="u" type="text" maxlength="16" placeholder="Felhasználónév (3–16 betű, szám, _)" autocomplete="username" autocapitalize="off">
+  <input id="p" type="password" placeholder="Jelszó (legalább 6 karakter)" autocomplete="current-password">
+  <label><input id="rm" type="checkbox" checked> Emlékezz rám ezen az eszközön</label>
+  <button id="li">Belépés</button><button id="rg" class="s">Regisztráció</button>
+  <div class="er" id="er"></div>
+</div>
+<div id="l"></div><p class="note" id="st"></p>
 <script type="module">
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyAn99OZXIQM5SaADMGEt-cHdnHecUi2e5c",
@@ -22,35 +34,63 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "590825336958",
   appId: "1:590825336958:web:2c63f234a35bee4147a82f"
 };
-const $ = s => document.getElementById(s), P = new URLSearchParams(location.search), me = P.get("me") || "", sync = P.get("s");
-if (sync) $("l").textContent = "";
+const $ = s => document.getElementById(s), P = new URLSearchParams(location.search), me = P.get("me") || "", boardMode = P.get("b");
+const post = o => parent.postMessage(o, "*");
 try {
-  const base = "https://www.gstatic.com/firebasejs/10.12.2/";
-  const { initializeApp } = await import(base + "firebase-app.js");
-  const fs = await import(base + "firebase-firestore.js");
-  const db = fs.initializeFirestore(initializeApp(FIREBASE_CONFIG), { experimentalAutoDetectLongPolling: true });
-  // a játék (neocities.org) küldi a játékos adatait
-  addEventListener("message", async e => {
-    const d = e.data;
-    if (!/^https:\/\/[a-z0-9-]+\.neocities\.org$/.test(e.origin) || !d || d.type != "tga" || typeof d.id != "string") return;
-    const lv = Math.min(50, Math.max(1, +d.lv || 1)), q = Math.max(0, Math.floor(+d.q || 0)), gold = Math.max(0, Math.floor(+d.gold || 0));
-    const score = lv * 1000 + q * 150 + Math.floor(gold / 10);
-    try { await fs.setDoc(fs.doc(db, "scores", d.id.slice(0, 24)), { name: String(d.name).slice(0, 20), cls: String(d.cls).slice(0, 12), lv, q, gold, score, t: Date.now() }); }
-    catch (x) { $("st").textContent = "Mentési hiba: " + (x.code || x.message); }
-  });
-  if (!sync) fs.onSnapshot(fs.query(fs.collection(db, "scores"), fs.orderBy("score", "desc"), fs.limit(10)), snap => {
-    const l = $("l"); l.textContent = "";
-    if (snap.empty) { l.innerHTML = '<p class="note">Még nincs egyetlen játékos sem a listán.</p>'; return; }
-    snap.docs.forEach((doc, i) => {
-      const d = doc.data(), r = document.createElement("div"); r.className = "r" + (doc.id == me ? " me" : "");
-      const p = document.createElement("div"); p.className = "p"; p.textContent = ["🥇", "🥈", "🥉"][i] || (i + 1) + ".";
-      const n = document.createElement("div"); n.className = "n";
-      const b = document.createElement("b"); b.textContent = d.name;
-      const s = document.createElement("span"); s.textContent = `${d.cls} · ${d.lv}. szint · ${d.q} küldetés · ${d.gold} arany`;
-      n.append(b, s);
-      const sc = document.createElement("div"); sc.className = "s"; sc.textContent = d.score + " pont";
-      r.append(p, n, sc); l.append(r);
+  const B = "https://www.gstatic.com/firebasejs/10.12.2/";
+  const { initializeApp } = await import(B + "firebase-app.js");
+  const A = await import(B + "firebase-auth.js");
+  const F = await import(B + "firebase-firestore.js");
+  const app = initializeApp(FIREBASE_CONFIG), db = F.initializeFirestore(app, { experimentalAutoDetectLongPolling: true }), auth = A.getAuth(app);
+  if (boardMode) {
+    F.onSnapshot(F.query(F.collection(db, "ranks"), F.orderBy("score", "desc"), F.limit(10)), snap => {
+      const l = $("l"); l.textContent = "";
+      if (snap.empty) { l.innerHTML = '<p class="note">Még nincs egyetlen játékos sem a listán.</p>'; return; }
+      snap.docs.forEach((doc, i) => {
+        const d = doc.data(), r = document.createElement("div"); r.className = "r" + (doc.id == me ? " me" : "");
+        const p = document.createElement("div"); p.className = "p"; p.textContent = ["🥇", "🥈", "🥉"][i] || (i + 1) + ".";
+        const n = document.createElement("div"); n.className = "n";
+        const b = document.createElement("b"); b.textContent = d.name;
+        const s = document.createElement("span"); s.textContent = `${d.cls} · ${d.lv}. szint · ${d.q} küldetés · ${d.gold} arany`;
+        n.append(b, s);
+        const sc = document.createElement("div"); sc.className = "s2"; sc.textContent = d.score + " pont";
+        r.append(p, n, sc); l.append(r);
+      });
+    }, err => { $("st").textContent = "Hiba az olvasásnál: " + err.code; });
+  } else {
+    const mail = n => n.toLowerCase() + "@great-adventures.app", ok = n => /^[A-Za-z0-9_]{3,16}$/.test(n);
+    const msg = c => ({ "auth/invalid-credential": "Hibás név vagy jelszó.", "auth/wrong-password": "Hibás név vagy jelszó.", "auth/user-not-found": "Nincs ilyen felhasználó.", "auth/email-already-in-use": "Ez a név már foglalt.", "auth/weak-password": "A jelszó legalább 6 karakter legyen.", "auth/operation-not-allowed": "A bejelentkezés nincs engedélyezve a Firebase-ben.", "auth/unauthorized-domain": "Ez a domain nincs engedélyezve a Firebase-ben.", "auth/too-many-requests": "Túl sok próbálkozás, várj egy kicsit.", "auth/network-request-failed": "Nincs hálózati kapcsolat." }[c] || "Hiba: " + c);
+    const go = async reg => {
+      const n = $("u").value.trim(), pw = $("p").value; $("er").textContent = "";
+      if (!ok(n)) { $("er").textContent = "A név 3–16 karakter, csak betű (ékezet nélkül), szám és _ lehet."; return; }
+      try {
+        await A.setPersistence(auth, $("rm").checked ? A.browserLocalPersistence : A.browserSessionPersistence);
+        if (reg) { const c = await A.createUserWithEmailAndPassword(auth, mail(n), pw); await A.updateProfile(c.user, { displayName: n }); }
+        else await A.signInWithEmailAndPassword(auth, mail(n), pw);
+      } catch (e) { $("er").textContent = msg(e.code); }
+    };
+    $("li").onclick = () => go(false); $("rg").onclick = () => go(true);
+    A.onAuthStateChanged(auth, async u => {
+      if (!u) { $("f").hidden = false; post({ type: "tga-auth", user: null }); return; }
+      $("f").hidden = true; post({ type: "tga-auth", user: u.uid, name: u.displayName || u.email.split("@")[0] });
+      try { const s = await F.getDoc(F.doc(db, "users", u.uid)); post({ type: "tga-load", d: s.exists() ? s.data().d : null }); }
+      catch (e) { post({ type: "tga-load", d: null, err: e.code }); }
     });
-  }, err => { $("st").textContent = "Hiba az olvasásnál: " + err.code; });
+    addEventListener("message", async e => {
+      const d = e.data, u = auth.currentUser;
+      if (!/^https:\/\/[a-z0-9-]+\.neocities\.org$/.test(e.origin) || !d || !u) return;
+      if (d.type == "tga-logout") { await A.signOut(auth); return; }
+      if (d.type != "tga-save") return;
+      const lv = Math.min(50, Math.max(1, Math.floor(+d.lv || 1))), q = Math.max(0, Math.floor(+d.q || 0)), gold = Math.max(0, Math.floor(+d.gold || 0));
+      const score = lv * 1000 + q * 150 + Math.floor(gold / 10);
+      try { await F.setDoc(F.doc(db, "users", u.uid), { d: String(d.d).slice(0, 60000), t: F.serverTimestamp() }); }
+      catch (x) { $("st").textContent = "Mentési hiba: " + (x.code || x.message); return; }
+      try {
+        const sref = F.doc(db, "stats", u.uid), cur = await F.getDoc(sref);
+        await F.setDoc(sref, { lv, q, gold, c: cur.exists() ? cur.data().c : F.serverTimestamp(), t: F.serverTimestamp() });
+        await F.setDoc(F.doc(db, "ranks", u.uid), { name: String(u.displayName || "").slice(0, 20), cls: String(d.cls).slice(0, 12), lv, q, gold, score });
+      } catch (x) { $("st").textContent = "Ranglista-frissítés elutasítva: " + (x.code || x.message); }
+    });
+  }
 } catch (e) { $("st").textContent = "Nem sikerült betölteni a Firebase-t: " + e.message; }
 </script></body></html>
