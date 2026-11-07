@@ -76,9 +76,33 @@ try {
       try { const s = await F.getDoc(F.doc(db, "users", u.uid)); post({ type: "tga-load", d: s.exists() ? s.data().d : null }); }
       catch (e) { post({ type: "tga-load", d: null, err: e.code }); }
     });
+    const ms = t => (t && t.toMillis) ? t.toMillis() : 0;
+    async function sendNews() {
+      try {
+        const ns = await F.getDocs(F.query(F.collection(db, "news"), F.orderBy("ts", "desc"), F.limit(15)));
+        const ps = await F.getDocs(F.query(F.collection(db, "polls"), F.orderBy("ts", "desc"), F.limit(5)));
+        const news = ns.docs.map(x => { const v = x.data(); return { id: x.id, t: String(v.t || "").slice(0, 120), x: String(v.x || "").slice(0, 3000), ts: ms(v.ts) }; });
+        const polls = await Promise.all(ps.docs.map(async x => {
+          const v = x.data(), o = (v.o || []).map(String).slice(0, 6);
+          const c = await Promise.all(o.map((_, i) => F.getCountFromServer(F.query(F.collection(db, "votes"), F.where("p", "==", x.id), F.where("o", "==", i))).then(r => r.data().count)));
+          let my = -1; const cu = auth.currentUser;
+          if (cu) { const r = await F.getDoc(F.doc(db, "votes", x.id + "_" + cu.uid)); if (r.exists()) my = r.data().o; }
+          return { id: x.id, q: String(v.q || "").slice(0, 200), o, open: !!v.open, ts: ms(v.ts), c, my };
+        }));
+        post({ type: "tga-newsdata", news, polls });
+      } catch (err) { post({ type: "tga-newsdata", err: err.code || String(err.message) }); }
+    }
     addEventListener("message", async e => {
       const d = e.data, u = auth.currentUser;
-      if (!/^https:\/\/[a-z0-9-]+\.neocities\.org$/.test(e.origin) || !d || !u) return;
+      if (!/^https:\/\/[a-z0-9-]+\.neocities\.org$/.test(e.origin) || !d) return;
+      if (d.type == "tga-news") { await sendNews(); return; }
+      if (!u) return;
+      if (d.type == "tga-vote") {
+        const p = String(d.p || "").slice(0, 40), o = Math.floor(+d.o);
+        try { await F.setDoc(F.doc(db, "votes", p + "_" + u.uid), { p, o, u: u.uid, t: F.serverTimestamp() }); post({ type: "tga-voteres", ok: 1 }); }
+        catch (err) { post({ type: "tga-voteres", err: err.code || "hiba" }); }
+        await sendNews(); return;
+      }
       if (d.type == "tga-logout") { await A.signOut(auth); return; }
       if (d.type != "tga-save") return;
       const lv = Math.min(100, Math.max(1, Math.floor(+d.lv || 1))), q = Math.max(0, Math.floor(+d.q || 0)), gold = Math.max(0, Math.floor(+d.gold || 0));
