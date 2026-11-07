@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="hu"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Admin: Hirdetőtábla</title>
+<style>
+:root{--c:#1d2a22;--t:#ece3cc;--m:#9fae9c;--g:#c8a24a;--bd:#3a4d3f;color-scheme:dark}
+*{box-sizing:border-box}body{margin:0;padding:14px;max-width:640px;margin:auto;background:#121b16;color:var(--t);font:16px/1.5 Georgia,serif}
+input,textarea{width:100%;padding:10px;margin:5px 0;border-radius:6px;border:1px solid var(--g);background:var(--c);color:var(--t);font:inherit}
+button{padding:10px 14px;margin:5px 4px 5px 0;border:0;border-radius:6px;background:var(--g);color:#1a1507;font:bold 1em Georgia,serif;cursor:pointer}
+button.s{background:var(--c);color:var(--t);border:1px solid var(--bd)}button.d{background:#7a2c22;color:#fff}
+h2,h3{color:var(--g);margin:.6em 0 .2em}.card{background:var(--c);border:1px solid var(--bd);border-radius:8px;padding:10px 12px;margin:8px 0}
+.m{color:var(--m);font-size:.88em}.er{color:#d36b57;min-height:1.3em}.ok{color:#8fd18f}pre{white-space:pre-wrap;margin:.3em 0;font:inherit}
+.bar{height:8px;background:#2a3a2e;border-radius:4px}.bar>i{display:block;height:100%;background:var(--g);border-radius:4px}
+</style></head><body>
+<h2>📢 Hirdetőtábla admin</h2>
+<div id="lg" hidden>
+  <input id="u" placeholder="Felhasználónév" autocapitalize="off" autocomplete="username">
+  <input id="p" type="password" placeholder="Jelszó" autocomplete="current-password">
+  <button id="li">Belépés</button><div class="er" id="er"></div>
+</div>
+<div id="ad" hidden>
+  <p class="m">Belépve: <b id="em"></b> · <button class="s" id="lo">Kilépés</button><br>Ezt az e-mail-címet kell a Firestore-szabályokba beírni admin azonosítóként.</p>
+  <h3>Új hír</h3>
+  <input id="nt" maxlength="120" placeholder="Cím"><textarea id="nx" rows="5" maxlength="3000" placeholder="Szöveg"></textarea>
+  <button id="nb">Hír közzététele</button><span id="ns" class="m"></span>
+  <h3>Új szavazás</h3>
+  <input id="pq" maxlength="200" placeholder="Kérdés">
+  <input class="po" maxlength="80" placeholder="1. válasz"><input class="po" maxlength="80" placeholder="2. válasz">
+  <input class="po" maxlength="80" placeholder="3. válasz (nem kötelező)"><input class="po" maxlength="80" placeholder="4. válasz (nem kötelező)">
+  <input class="po" maxlength="80" placeholder="5. válasz (nem kötelező)"><input class="po" maxlength="80" placeholder="6. válasz (nem kötelező)">
+  <button id="pb">Szavazás indítása</button><span id="ps" class="m"></span>
+  <h3>Szavazások</h3><div id="pl"></div>
+  <h3>Hírek</h3><div id="nl"></div>
+</div>
+<script type="module">
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyAn99OZXIQM5SaADMGEt-cHdnHecUi2e5c",
+  authDomain: "regenyek2-komment.firebaseapp.com",
+  projectId: "regenyek2-komment",
+  storageBucket: "regenyek2-komment.firebasestorage.app",
+  messagingSenderId: "590825336958",
+  appId: "1:590825336958:web:2c63f234a35bee4147a82f"
+};
+const $ = s => document.getElementById(s), esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const B = "https://www.gstatic.com/firebasejs/10.12.2/";
+const { initializeApp } = await import(B + "firebase-app.js");
+const A = await import(B + "firebase-auth.js");
+const F = await import(B + "firebase-firestore.js");
+const app = initializeApp(FIREBASE_CONFIG), db = F.initializeFirestore(app, { experimentalAutoDetectLongPolling: true }), auth = A.getAuth(app);
+const date = t => t && t.toDate ? t.toDate().toLocaleString("hu-HU") : "";
+$("li").onclick = async () => {
+  $("er").textContent = "";
+  try { await A.signInWithEmailAndPassword(auth, $("u").value.trim().toLowerCase() + "@great-adventures.app", $("p").value); }
+  catch (e) { $("er").textContent = "Belépési hiba: " + e.code; }
+};
+$("lo").onclick = () => A.signOut(auth);
+A.onAuthStateChanged(auth, u => {
+  $("lg").hidden = !!u; $("ad").hidden = !u;
+  if (u) { $("em").textContent = u.email; load(); }
+});
+async function load() {
+  try {
+    const ps = await F.getDocs(F.query(F.collection(db, "polls"), F.orderBy("ts", "desc"), F.limit(20)));
+    $("pl").innerHTML = "";
+    for (const x of ps.docs) {
+      const v = x.data(), o = v.o || [];
+      const c = await Promise.all(o.map((_, i) => F.getCountFromServer(F.query(F.collection(db, "votes"), F.where("p", "==", x.id), F.where("o", "==", i))).then(r => r.data().count)));
+      const tot = c.reduce((a, b) => a + b, 0), d = document.createElement("div"); d.className = "card";
+      d.innerHTML = `<b>${esc(v.q)}</b> <span class="m">${date(v.ts)} · ${v.open ? "nyitott" : "lezárva"} · ${tot} szavazat</span>` +
+        o.map((t, i) => `<div>${esc(t)}: <b>${c[i]}</b><div class="bar"><i style="width:${tot ? Math.round(c[i] * 100 / tot) : 0}%"></i></div></div>`).join("");
+      const b1 = document.createElement("button"); b1.className = "s"; b1.textContent = v.open ? "Lezárás" : "Újranyitás";
+      b1.onclick = async () => { await F.updateDoc(F.doc(db, "polls", x.id), { open: !v.open }); load(); };
+      const b2 = document.createElement("button"); b2.className = "d"; b2.textContent = "Törlés";
+      b2.onclick = async () => { if (confirm("Biztosan törlöd a szavazást?")) { await F.deleteDoc(F.doc(db, "polls", x.id)); load(); } };
+      d.append(b1, b2); $("pl").append(d);
+    }
+    if (!ps.docs.length) $("pl").innerHTML = '<p class="m">Még nincs szavazás.</p>';
+    const ns = await F.getDocs(F.query(F.collection(db, "news"), F.orderBy("ts", "desc"), F.limit(20)));
+    $("nl").innerHTML = "";
+    for (const x of ns.docs) {
+      const v = x.data(), d = document.createElement("div"); d.className = "card";
+      d.innerHTML = `<b>${esc(v.t)}</b> <span class="m">${date(v.ts)}</span><pre>${esc(v.x)}</pre>`;
+      const b2 = document.createElement("button"); b2.className = "d"; b2.textContent = "Törlés";
+      b2.onclick = async () => { if (confirm("Biztosan törlöd a hírt?")) { await F.deleteDoc(F.doc(db, "news", x.id)); load(); } };
+      d.append(b2); $("nl").append(d);
+    }
+    if (!ns.docs.length) $("nl").innerHTML = '<p class="m">Még nincs hír.</p>';
+  } catch (e) { $("ns").textContent = "Betöltési hiba: " + e.code; }
+}
+$("nb").onclick = async () => {
+  const t = $("nt").value.trim(), x = $("nx").value.trim();
+  if (!t || !x) { $("ns").textContent = "A cím és a szöveg is kell."; return; }
+  try { await F.addDoc(F.collection(db, "news"), { t, x, ts: F.serverTimestamp() }); $("nt").value = ""; $("nx").value = ""; $("ns").innerHTML = '<span class="ok">Közzétéve ✔</span>'; load(); }
+  catch (e) { $("ns").textContent = "Hiba: " + e.code + " (a Firestore-szabályokban az admin e-mail-cím beállítva?)"; }
+};
+$("pb").onclick = async () => {
+  const q = $("pq").value.trim(), o = [...document.querySelectorAll(".po")].map(i => i.value.trim()).filter(Boolean);
+  if (!q || o.length < 2) { $("ps").textContent = "Kérdés és legalább 2 válasz kell."; return; }
+  try { await F.addDoc(F.collection(db, "polls"), { q, o, open: true, ts: F.serverTimestamp() }); $("pq").value = ""; document.querySelectorAll(".po").forEach(i => i.value = ""); $("ps").innerHTML = '<span class="ok">Elindítva ✔</span>'; load(); }
+  catch (e) { $("ps").textContent = "Hiba: " + e.code + " (a Firestore-szabályokban az admin e-mail-cím beállítva?)"; }
+};
+</script></body></html>
