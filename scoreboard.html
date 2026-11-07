@@ -81,7 +81,7 @@ try {
       if (!/^https:\/\/[a-z0-9-]+\.neocities\.org$/.test(e.origin) || !d || !u) return;
       if (d.type == "tga-logout") { await A.signOut(auth); return; }
       if (d.type != "tga-save") return;
-      const lv = Math.min(50, Math.max(1, Math.floor(+d.lv || 1))), q = Math.max(0, Math.floor(+d.q || 0)), gold = Math.max(0, Math.floor(+d.gold || 0));
+      const lv = Math.min(100, Math.max(1, Math.floor(+d.lv || 1))), q = Math.max(0, Math.floor(+d.q || 0)), gold = Math.max(0, Math.floor(+d.gold || 0));
       const score = lv * 1000 + q * 150 + Math.floor(gold / 10);
       try { await F.setDoc(F.doc(db, "users", u.uid), { d: String(d.d).slice(0, 60000), t: F.serverTimestamp() }); }
       catch (x) { $("st").textContent = "Mentési hiba: " + (x.code || x.message); return; }
